@@ -58,13 +58,12 @@ public class StepsRunner {
   @Nullable private LoadDockerStep loadDockerStep;
   @Nullable private WriteTarFileStep writeTarFileStep;
 
-  public StepsRunner(BuildConfiguration buildConfiguration) {
+  public StepsRunner(BuildConfiguration buildConfiguration, ExecutorService executorService) {
     this.buildConfiguration = buildConfiguration;
 
-    ExecutorService executorService =
-        JibSystemProperties.isSerializedExecutionEnabled()
-            ? MoreExecutors.newDirectExecutorService()
-            : buildConfiguration.getExecutorService();
+    if (JibSystemProperties.isSerializedExecutionEnabled()) {
+      executorService = MoreExecutors.newDirectExecutorService();
+    }
     listeningExecutorService = MoreExecutors.listeningDecorator(executorService);
   }
 

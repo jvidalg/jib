@@ -20,8 +20,12 @@ import com.google.cloud.tools.jib.builder.steps.BuildResult;
 import com.google.cloud.tools.jib.builder.steps.StepsRunner;
 import com.google.cloud.tools.jib.configuration.BuildConfiguration;
 import com.google.cloud.tools.jib.docker.DockerClient;
+import com.google.common.annotations.VisibleForTesting;
 import java.nio.file.Path;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.function.Supplier;
 
 /** Steps for building an image. */
 public class BuildSteps {
@@ -30,18 +34,24 @@ public class BuildSteps {
   private static final String DESCRIPTION_FOR_DOCKER_DAEMON = "Building image to Docker daemon";
   private static final String DESCRIPTION_FOR_TARBALL = "Building image tarball";
 
+  @VisibleForTesting
+  static Supplier<ExecutorService> executorServiceFactory = Executors::newCachedThreadPool;
+
   /** Runs appropriate steps to build an image. */
   @FunctionalInterface
-  private interface ImageBuildRunnable {
+  @VisibleForTesting
+  interface ImageBuildRunnable {
 
     /**
      * Builds an image.
      *
+     * @param executorService the executor service to be used
      * @return the built image
      * @throws ExecutionException if an exception occurs during execution
      * @throws InterruptedException if the execution is interrupted
      */
-    BuildResult build() throws ExecutionException, InterruptedException;
+    BuildResult build(ExecutorService executorService)
+        throws ExecutionException, InterruptedException;
   }
 
   /**
@@ -54,8 +64,8 @@ public class BuildSteps {
     return new BuildSteps(
         DESCRIPTION_FOR_DOCKER_REGISTRY,
         buildConfiguration,
-        () ->
-            new StepsRunner(buildConfiguration)
+        (executorService) ->
+            new StepsRunner(buildConfiguration, executorService)
                 .runRetrieveTargetRegistryCredentialsStep()
                 .runAuthenticatePushStep()
                 .runPullBaseImageStep()
@@ -82,8 +92,8 @@ public class BuildSteps {
     return new BuildSteps(
         DESCRIPTION_FOR_DOCKER_DAEMON,
         buildConfiguration,
-        () ->
-            new StepsRunner(buildConfiguration)
+        (executorService) ->
+            new StepsRunner(buildConfiguration, executorService)
                 .runPullBaseImageStep()
                 .runPullAndCacheBaseImageLayersStep()
                 .runBuildAndCacheApplicationLayerSteps()
@@ -104,8 +114,8 @@ public class BuildSteps {
     return new BuildSteps(
         DESCRIPTION_FOR_TARBALL,
         buildConfiguration,
-        () ->
-            new StepsRunner(buildConfiguration)
+        (executorService) ->
+            new StepsRunner(buildConfiguration, executorService)
                 .runPullBaseImageStep()
                 .runPullAndCacheBaseImageLayersStep()
                 .runBuildAndCacheApplicationLayerSteps()
@@ -124,7 +134,8 @@ public class BuildSteps {
    * @param buildConfiguration the configuration parameters for the build
    * @param imageBuildRunnable runs the necessary steps to build an image
    */
-  private BuildSteps(
+  @VisibleForTesting
+  BuildSteps(
       String description,
       BuildConfiguration buildConfiguration,
       ImageBuildRunnable imageBuildRunnable) {
@@ -145,9 +156,17 @@ public class BuildSteps {
    * @throws ExecutionException if an exception occurs during execution
    */
   public BuildResult run() throws InterruptedException, ExecutionException {
+    boolean shouldShutdown = !buildConfiguration.getExecutorService().isPresent();
+    ExecutorService executorService =
+        buildConfiguration.getExecutorService().orElseGet(executorServiceFactory);
+
     try (TimerEventDispatcher ignored =
         new TimerEventDispatcher(buildConfiguration.getEventDispatcher(), description)) {
-      return imageBuildRunnable.build();
+      return imageBuildRunnable.build(executorService);
+    } finally {
+      if (shouldShutdown) {
+        executorService.shutdown();
+      }
     }
   }
 }

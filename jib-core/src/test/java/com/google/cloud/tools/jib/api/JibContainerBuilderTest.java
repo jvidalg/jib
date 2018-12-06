@@ -181,7 +181,7 @@ public class JibContainerBuilderTest {
         Arrays.asList(mockLayerConfiguration1, mockLayerConfiguration2),
         buildConfiguration.getLayerConfigurations());
 
-    Assert.assertEquals(mockExecutorService, buildConfiguration.getExecutorService());
+    Assert.assertEquals(mockExecutorService, buildConfiguration.getExecutorService().get());
 
     buildConfiguration.getEventDispatcher().dispatch(mockJibEvent);
     Mockito.verify(mockJibEventConsumer).accept(mockJibEvent);

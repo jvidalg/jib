@@ -30,6 +30,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.StringJoiner;
 import java.util.concurrent.ExecutorService;
@@ -234,10 +235,6 @@ public class BuildConfiguration {
                         + "' does not use a specific image digest - build may not be reproducible"));
           }
 
-          if (executorService == null) {
-            executorService = Executors.newCachedThreadPool();
-          }
-
           return new BuildConfiguration(
               baseImageConfiguration,
               Preconditions.checkNotNull(targetImageConfiguration),
@@ -250,7 +247,7 @@ public class BuildConfiguration {
               layerConfigurations,
               toolName,
               eventDispatcher,
-              executorService);
+              Optional.ofNullable(executorService));
 
         case 1:
           throw new IllegalStateException(missingFields.get(0) + " is required but not set");
@@ -302,7 +299,7 @@ public class BuildConfiguration {
   private final ImmutableList<LayerConfiguration> layerConfigurations;
   private final String toolName;
   private final EventDispatcher eventDispatcher;
-  private final ExecutorService executorService;
+  private final Optional<ExecutorService> executorService;
 
   /** Instantiate with {@link #builder}. */
   private BuildConfiguration(
@@ -317,7 +314,7 @@ public class BuildConfiguration {
       ImmutableList<LayerConfiguration> layerConfigurations,
       String toolName,
       EventDispatcher eventDispatcher,
-      ExecutorService executorService) {
+      Optional<ExecutorService> executorService) {
     this.baseImageConfiguration = baseImageConfiguration;
     this.targetImageConfiguration = targetImageConfiguration;
     this.additionalTargetImageTags = additionalTargetImageTags;
@@ -365,7 +362,7 @@ public class BuildConfiguration {
     return eventDispatcher;
   }
 
-  public ExecutorService getExecutorService() {
+  public Optional<ExecutorService> getExecutorService() {
     return executorService;
   }
 
